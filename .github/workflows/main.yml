@@ -23,7 +23,9 @@ jobs:
           pip install -r app/requirements.txt # If you have a requirements.txt file
 
       - name: Build executable
-        run: python3 app/build_executable.py
+        run: |
+          cd app
+          python3 build_executable.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -48,7 +50,9 @@ jobs:
           pip install -r app/requirements.txt
 
       - name: Build executable
-        run: python3 app/build_executable.py
+        run: |
+          cd app
+          python3 build_executable.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -73,7 +77,9 @@ jobs:
           pip install -r app/requirements.txt
 
       - name: Build executable
-        run: python3 app/build_executable.py
+        run: |
+          cd app
+          python3 build_executable.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
