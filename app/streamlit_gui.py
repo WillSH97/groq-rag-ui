@@ -22,14 +22,9 @@
 
 import streamlit as st
 
-with st.spinner("loading ollama backend..."):
-    from llama_engine import (
-        check_ollama_install,
-        check_and_serve_ollama,
-        ollama_list_and_install_models,
-        ollama_load_model,
-        llama_chat_gen_streamed
-    )
+with st.spinner("importing Groq and model list..."):
+    from groq import Groq
+    from groq_engine import model_list, groq_chat
 
 # initialise base directories
 from os import path
@@ -42,40 +37,28 @@ BASE_DIR = path.abspath(path.dirname(__file__))
 CHAT_DIR = os.path.join(BASE_DIR, "chats")
 os.makedirs(CHAT_DIR, exist_ok = True) #create chat dir if doesn't exist
 
-# janky way of starting llama chat engine
+# janky way of starting chat engine
 if "initialisation" not in st.session_state:
     st.session_state.initialisation = True
 
-if "ollama_model" not in st.session_state:
-    st.session_state.ollama_model = "llama3.2"
+if "groq_api_key" not in st.session_state:
+    st.session_state.groq_api_key = ""
+
+if "groq_client" not in st.session_state:
+    st.session_state.groq_client = None
 
 
-@st.dialog("Initialize Ollama engine")
-def initialise_ollama():
-    with st.spinner(
-        "loading ollama (this may take a while on first run - we'll need to download a default model!)..."
-    ):
-        if not check_ollama_install():
-            st.error(
-                "You don't have ollama installed! Install from [here](https://ollama.com/) and restart"
-            )
-        else:
-            check_and_serve_ollama()
-            chat_model = st.selectbox(
-                "Select model to run on ollama",
-                options=ollama_list_and_install_models(),
-                index=0,
-            )
-            if st.button("Initialise Ollama chat"):
-                st.session_state.ollama_model = chat_model
-                ollama_load_model(chat_model)
-                st.session_state.initialisation = False
-                st.rerun()
-
+@st.dialog("Groq API Key")
+def initialise_groq():
+    st.session_state.groq_api_key = st.text_input("Groq API key")
+    if st.button("initialise Groq"):
+        st.session_state.groq_client = Groq(api_key = st.session_state.groq_api_key)
+        st.session_state.initialisation = False
+        st.rerun()
 
 if st.session_state.initialisation == True:
-    st.title("Initialise Ollama!")
-    initialise_ollama()
+    st.title("Initialise Groq!")
+    initialise_groq()
 
 if st.session_state.initialisation == False:
     # rest of code
@@ -261,10 +244,16 @@ if st.session_state.initialisation == False:
     def create_new_chat_hist():
         try:
             name = st.text_input("Put your chat name here!", max_chars=156)
+            use_rag = st.checkbox("Use RAG?", value=Fal)
             selected_db = st.selectbox(
                 "select injection database",
                 options=list_all_collections(),
                 index=0,  # defaults to first example injection database
+            )
+            model = st.selectbox(
+                "select model to run",
+                options = model_list,
+                index=0,
             )
             with st.expander("Advanced Options 🤓", expanded = False):
                 system_prompt = st.text_area("Put your system prompt here!", 
@@ -328,6 +317,7 @@ Message to respond to:
                             "injection_col": (
                                 None if "injection_col" not in locals() else injection_col
                             ),  # check if injection_col var exists
+                            "model": model #groq model
                         }
                         st.session_state.current_chat = name
                         # save chat history now:
@@ -554,15 +544,15 @@ Message to respond to:
         with st.chat_message("assistant"):
             with st.spinner(
                 "Responding..."
-            ):  # <--- POTENTIALLY REMOVE FOR OLLAMA because it's so fast
-                # Use RAG history for generation
-                # NOTE - this could blow out memory quite quickly??? Be sure to change context length et cetera.
+            ): 
                 if st.session_state.use_rag:
                     input_hist = chat_histories["RAG_hist"]
                 else:
                     input_hist = chat_histories["normal_hist"]
-                generated_response = llama_chat_gen_streamed(
-                    input_hist, model=st.session_state.ollama_model
+                generated_response = groq_chat(
+                    st.session_state.groq_client,
+                    input_hist, 
+                    model=chat_histories["model"]
                 )
                 response = st.write_stream(generated_response)
 
