@@ -61,6 +61,7 @@ def create_executable():
         "--collect-all", "pynndescent",
         "--collect-all", "numba",
         "--collect-all", "tokenizers",  # windows-specific issues
+        "--collect-all", "groq",
         # Specify the entry point
         "run.py",
     ]
