@@ -86,3 +86,42 @@ jobs:
         with:
           name: macos-executable
           path: app/dist/run # Adjust path to your executable
+
+  create-release:
+      needs: [build-windows, build-linux, build-macos]
+      runs-on: ubuntu-latest
+      if: startsWith(github.ref, 'refs/tags/v')
+      permissions:
+        contents: write
+      steps:
+        - name: Download Windows executable
+          uses: actions/download-artifact@v4
+          with:
+            name: windows-executable
+            path: ./windows
+        
+        - name: Download Linux executable
+          uses: actions/download-artifact@v4
+          with:
+            name: linux-executable
+            path: ./linux
+        
+        - name: Download macOS executable
+          uses: actions/download-artifact@v4
+          with:
+            name: macos-executable
+            path: ./macos
+        
+        - name: Package executables
+          run: |
+            cd windows && zip -r ../run-windows.zip . && cd ..
+            cd linux && tar -czf ../run-linux.tar.gz . && cd ..
+            cd macos && zip -r ../run-macos.zip . && cd ..
+        
+        - name: Create Release
+          uses: softprops/action-gh-release@v1
+          with:
+            files: |
+              run-windows.zip
+              run-linux.tar.gz
+              run-macos.zip
