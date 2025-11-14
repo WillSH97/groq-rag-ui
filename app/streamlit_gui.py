@@ -21,6 +21,8 @@
 '''
 
 import streamlit as st
+from dotenv import load_dotenv
+load_dotenv()
 
 with st.spinner("importing Groq and model list..."):
     from groq import Groq
@@ -42,7 +44,7 @@ if "initialisation" not in st.session_state:
     st.session_state.initialisation = True
 
 if "groq_api_key" not in st.session_state:
-    st.session_state.groq_api_key = ""
+    st.session_state.groq_api_key = os.environ.get("GROQ_API_KEY", "")
 
 if "groq_client" not in st.session_state:
     st.session_state.groq_client = None
@@ -50,11 +52,19 @@ if "groq_client" not in st.session_state:
 
 @st.dialog("Groq API Key")
 def initialise_groq():
-    st.session_state.groq_api_key = st.text_input("Groq API key")
-    if st.button("initialise Groq"):
+    if st.session_state.groq_api_key != "":
         st.session_state.groq_client = Groq(api_key = st.session_state.groq_api_key)
         st.session_state.initialisation = False
         st.rerun()
+    else:
+        st.session_state.groq_api_key = st.text_input("Groq API key")
+        if st.button("initialise Groq"):
+            st.session_state.groq_client = Groq(api_key = st.session_state.groq_api_key)
+            os.environ["GROQ_API_KEY"] = st.session_state.groq_api_key
+            with open("./.env", "w") as f:
+                f.write(f"GROQ_API_KEY={st.session_state.groq_api_key}")
+            st.session_state.initialisation = False
+            st.rerun()
 
 if st.session_state.initialisation == True:
     st.title("Initialise Groq!")
@@ -101,8 +111,8 @@ if st.session_state.initialisation == False:
     if "is_generating" not in st.session_state:
         st.session_state.is_generating = False
 
-    if "use_rag" not in st.session_state:
-        st.session_state.use_rag = True
+    # if "use_rag" not in st.session_state:
+    #     st.session_state.use_rag = True
 
     # jank way to load chromadb on startup
     if "chromadb_loaded" not in st.session_state:
@@ -244,12 +254,15 @@ if st.session_state.initialisation == False:
     def create_new_chat_hist():
         try:
             name = st.text_input("Put your chat name here!", max_chars=156)
-            use_rag = st.checkbox("Use RAG?", value=Fal)
-            selected_db = st.selectbox(
-                "select injection database",
-                options=list_all_collections(),
-                index=0,  # defaults to first example injection database
-            )
+            use_rag = st.checkbox("Use RAG?", value=False)
+            if use_rag:
+                selected_db = st.selectbox(
+                    "select injection database",
+                    options=list_all_collections(),
+                    index=0,  # defaults to first example injection database
+                )
+            else:
+                selected_db = None
             model = st.selectbox(
                 "select model to run",
                 options = model_list,
@@ -270,21 +283,22 @@ Message to respond to:
 {USER_MESSAGE}""",
                     max_chars=750,
                 )
-    
-                # checking if there are metadatas/"columns" that have options for injection, making selectbox if so
-                quick_sample = client.get_collection(selected_db).get(limit=5)
-                if not all(x == None for x in quick_sample["metadatas"]):
-                    init_list = [None]
-                    init_list.extend(list(
-                            quick_sample["metadatas"][0].keys()
+                if use_rag:
+                    # checking if there are metadatas/"columns" that have options for injection, making selectbox if so
+                    quick_sample = client.get_collection(selected_db).get(limit=5)
+                    if not all(x == None for x in quick_sample["metadatas"]):
+                        init_list = [None]
+                        init_list.extend(list(
+                                quick_sample["metadatas"][0].keys()
+                            )
+                                        )# assuming first item in quick_sample has all metadatas, which as of 03/01/2025, is correct
+                        injection_col = st.selectbox(
+                            "select column for injection into RAG",
+                            options=init_list,  
+                            index=0, #first item is None, so default doc is used for injection
                         )
-                                    )# assuming first item in quick_sample has all metadatas, which as of 03/01/2025, is correct
-                    injection_col = st.selectbox(
-                        "select column for injection into RAG",
-                        options=init_list,  
-                        index=0, #first item is None, so default doc is used for injection
-                    )
-    
+                    
+        
             if st.button("Create", use_container_width=True):
                 # error checking
                 if not re.match("^[a-zA-Z0-9_-]*$", name):
@@ -303,7 +317,7 @@ Message to respond to:
                         "Injection template format invalid! Remember, put {INJECT_TEXT} where you'd like your RAG results to be injected, and {USER_MESSAGE} where you'd like your input message to be returned. Remember to include the curly brackets!"
                     )
                 else:
-                    if all([name, system_prompt, injection_template, selected_db]):
+                    if all([name, system_prompt, injection_template]) and (selected_db if use_rag else True):
                         init_messages = [
                             {"role": "system", "content": system_prompt},
                             # {"role": "assistant", "content": "Hi there, how can I help you today?"}
@@ -313,6 +327,7 @@ Message to respond to:
                             "RAG_hist": init_messages.copy(),
                             "system_prompt": system_prompt,
                             "injection_template": injection_template,
+                            "use_rag": use_rag,
                             "selected_db": selected_db,
                             "injection_col": (
                                 None if "injection_col" not in locals() else injection_col
@@ -326,7 +341,7 @@ Message to respond to:
     
                     else:  # catchall error (so janky - I'm so sorry)
                         st.error(
-                            "Missing chat name, system prompt, injection template, and/or injection database! Take a closer look at your selections."
+                            f"Missing chat name, system prompt, injection template, and/or injection database! Take a closer look at your selections. {name, system_prompt, injection_template, use_rag, selected_db, model}"
                         )
         except chromadb.errors.InvalidCollectionException:
             st.error(
@@ -414,14 +429,14 @@ Message to respond to:
     with st.sidebar:
         st.title("RAGChat")
 
-        st.button(
-            "RAG: " + ("ON" if st.session_state.use_rag else "OFF"),
-            on_click=lambda: setattr(
-                st.session_state, "use_rag", not st.session_state.use_rag
-            ),
-            type=("primary" if st.session_state.use_rag else "secondary"),
-            use_container_width=True,
-        )
+        # st.button(
+        #     "RAG: " + ("ON" if st.session_state.use_rag else "OFF"),
+        #     on_click=lambda: setattr(
+        #         st.session_state, "use_rag", not st.session_state.use_rag
+        #     ),
+        #     type=("primary" if st.session_state.use_rag else "secondary"),
+        #     use_container_width=True,
+        # )
         with st.expander("Chat Management", expanded=True):
             if st.button("Create New Chat"):
                 create_new_chat_hist()
@@ -489,12 +504,15 @@ Message to respond to:
                         st.markdown(message["content"])
 
     # Main chat interface with tabs
-    normal_tab, rag_tab = st.tabs(["Default", "RAG history"])
-    with normal_tab:
+    if st.session_state.all_chat_histories[st.session_state.current_chat]["use_rag"]:
+        normal_tab, rag_tab = st.tabs(["Default", "RAG history"])
+        with normal_tab:
+            display_chat_hist("normal_hist")
+    
+        with rag_tab:
+            display_chat_hist("RAG_hist")
+    else:
         display_chat_hist("normal_hist")
-
-    with rag_tab:
-        display_chat_hist("RAG_hist")
 
     # Single chat input and response handling
     if st.session_state.current_chat and not st.session_state.is_generating:
@@ -522,7 +540,7 @@ Message to respond to:
             rag_message = {"role": "user", "content": injection_prompt}
 
             # Add messages to respective histories
-            if st.session_state.use_rag:
+            if chat_histories["use_rag"]:
                 chat_histories["normal_hist"].append(normal_message)
                 chat_histories["RAG_hist"].append(rag_message)
             else:
@@ -545,7 +563,7 @@ Message to respond to:
             with st.spinner(
                 "Responding..."
             ): 
-                if st.session_state.use_rag:
+                if chat_histories["use_rag"]:
                     input_hist = chat_histories["RAG_hist"]
                 else:
                     input_hist = chat_histories["normal_hist"]
