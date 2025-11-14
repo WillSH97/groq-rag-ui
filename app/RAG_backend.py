@@ -30,8 +30,6 @@ from chromadb_engine import (
     make_db_from_txt,
 )
 
-from llama_engine import llama_chat_gen
-
 
 def create_injection_prompt(
     db_name,
