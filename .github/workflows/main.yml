@@ -20,7 +20,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pyinstaller
-          pip install -r requirements.txt # If you have a requirements.txt file
+          pip install -r app/requirements.txt # If you have a requirements.txt file
 
       - name: Build executable
         run: python3 app/build_executable.py
@@ -45,7 +45,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pyinstaller
-          pip install -r requirements.txt
+          pip install -r app/requirements.txt
 
       - name: Build executable
         run: python3 app/build_executable.py
@@ -70,7 +70,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pyinstaller
-          pip install -r requirements.txt
+          pip install -r app/requirements.txt
 
       - name: Build executable
         run: python3 app/build_executable.py
