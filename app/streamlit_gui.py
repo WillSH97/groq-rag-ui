@@ -50,8 +50,11 @@ if "groq_client" not in st.session_state:
     st.session_state.groq_client = None
 
 
-@st.dialog("Groq API Key")
+@st.dialog("Groq initialisation")
 def initialise_groq():
+    with st.spinner("checking env for groq api key"):
+        load_dotenv()
+        st.session_state.groq_api_key = os.environ.get("GROQ_API_KEY", "")
     if st.session_state.groq_api_key != "":
         st.session_state.groq_client = Groq(api_key = st.session_state.groq_api_key)
         st.session_state.initialisation = False
@@ -61,8 +64,9 @@ def initialise_groq():
         if st.button("initialise Groq"):
             st.session_state.groq_client = Groq(api_key = st.session_state.groq_api_key)
             os.environ["GROQ_API_KEY"] = st.session_state.groq_api_key
-            with open("./.env", "w") as f:
+            with open(f"{BASE_DIR}/.env", "w") as f:
                 f.write(f"GROQ_API_KEY={st.session_state.groq_api_key}")
+            load_dotenv()
             st.session_state.initialisation = False
             st.rerun()
 
@@ -517,7 +521,7 @@ Message to respond to:
     # Single chat input and response handling
     if st.session_state.current_chat and not st.session_state.is_generating:
 
-        prompt = st.chat_input("What is up?", max_chars=3000)
+        prompt = st.chat_input("What is up?", max_chars=999999999)
 
         if prompt:
             # Get both histories
