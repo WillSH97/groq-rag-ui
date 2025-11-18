@@ -32,6 +32,8 @@ from umap.umap_ import UMAP
 #fixing chromadb embedding execution issues on Intel mac
 from chromadb.utils.embedding_functions.onnx_mini_lm_l6_v2 import ONNXMiniLM_L6_V2
 
+from doc_processing_support import clean_utf8, process_pdf, process_docx
+
 from os import path
 import os
 
@@ -76,14 +78,6 @@ def batch_upsert(db_name, documents, ids, metadatas = None,):
                                 ) 
 
     return collection
-
-def clean_utf8(input_str):
-    """
-    function to clean strings to UTF-8 compatible encoding.
-    """
-    input_str = bytes(input_str, "utf-8").decode("utf-8", "ignore")
-    return input_str
-
 
 def split_texts(input_str: str, split_length: int = 128) -> list[str]:
     """
@@ -141,14 +135,7 @@ def make_db_from_pdf(
     """
 
     # make docs for embedding
-    reader = PdfReader(pdf_dir)
-    pagetexts = []
-    total_splits = []
-    for page in reader.pages:
-        text = page.extract_text()
-        text = text.replace("\n", " ")  # clean text of new lines
-        text = clean_utf8(text)
-        pagetexts.append(text)
+    pagetexts = process_pdf(pdf_dir)
 
     for pagetext in pagetexts:
         text_chunks = split_texts(pagetext, split_length)
@@ -204,8 +191,7 @@ def make_db_from_docx(
     outputs:
         - collection: returns ChromaDB collection that was just created.
     """
-    text = docx2txt.process(docx_dir)
-    text = clean_utf8(text)
+    text = process_docx(docx_dir)
     split_list = split_texts(text, split_length)
     ids = [f"id{num}" for num in range(len(split_list))]
 

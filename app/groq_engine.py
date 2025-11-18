@@ -24,6 +24,7 @@ def groq_chat(client,
               # new_message: str, 
               chat_history: list[dict], 
               model: str, 
+              documents: list[dict] = [],
               # system_prompt: str, 
              ):
     '''
@@ -50,6 +51,7 @@ def groq_chat(client,
         chat_completion = client.chat.completions.create(
             messages = msg_hist,
             model = model,
+            documents = documents,
             include_reasoning = False, #removes reasoning tokens from output because I'm lazy
             stream = True,
         )
@@ -57,6 +59,7 @@ def groq_chat(client,
         chat_completion = client.chat.completions.create(
             messages = msg_hist,
             model = model,
+            documents = documents,
             # include_reasoning = False, #removes reasoning tokens from output because I'm lazy
             stream = True,
         )

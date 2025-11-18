@@ -508,13 +508,17 @@ Message to respond to:
                         st.markdown(message["content"])
 
     # Main chat interface with tabs
-    if st.session_state.all_chat_histories[st.session_state.current_chat]["use_rag"]:
-        normal_tab, rag_tab = st.tabs(["Default", "RAG history"])
-        with normal_tab:
-            display_chat_hist("normal_hist")
     
-        with rag_tab:
-            display_chat_hist("RAG_hist")
+    if st.session_state.current_chat:
+        if st.session_state.all_chat_histories[st.session_state.current_chat]["use_rag"]:
+            normal_tab, rag_tab = st.tabs(["Default", "RAG history"])
+            with normal_tab:
+                display_chat_hist("normal_hist")
+        
+            with rag_tab:
+                display_chat_hist("RAG_hist")
+        else:
+            display_chat_hist("normal_hist")
     else:
         display_chat_hist("normal_hist")
 
@@ -533,15 +537,16 @@ Message to respond to:
 
             # Create normal and RAG versions of the message
             normal_message = {"role": "user", "content": prompt}
-            injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
-                chat_histories["selected_db"],
-                prompt,
-                num_return=num_return,
-                max_dist=max_dist,
-                inject_col=chat_histories["injection_col"],
-                inject_template=chat_histories["injection_template"],
-            )
-            rag_message = {"role": "user", "content": injection_prompt}
+            if chat_histories["use_rag"]:            
+                injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
+                    chat_histories["selected_db"],
+                    prompt,
+                    num_return=num_return,
+                    max_dist=max_dist,
+                    inject_col=chat_histories["injection_col"],
+                    inject_template=chat_histories["injection_template"],
+                )
+                rag_message = {"role": "user", "content": injection_prompt}
 
             # Add messages to respective histories
             if chat_histories["use_rag"]:
