@@ -607,3 +607,15 @@ Message to respond to:
                     ]
             save_chat_hist(st.session_state.current_chat)
             st.rerun()
+
+    # upload docs
+    with st.expander("upload documents"):
+        col1, col2 = st.columns(2)
+        upload_docs = col1.file_uploader("upload text documents as context for chat",
+                                         type=["txt", "docx", "png"],
+                                         accept_multiple_files = True
+                                        )
+        if upload_docs is not None:
+            if col1.button("add files to chat context"):
+                TEMP_VAR_FILES = return_texts(upload_docs)
+                #KEEP GOING - WHAT DO I DO HERE

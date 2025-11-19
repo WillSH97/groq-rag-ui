@@ -32,7 +32,35 @@ def process_txt(txt):
     text = clean_utf8(text)
     return text
 
-def return_texts():
+def return_texts(filelist):
     '''
-    returns list of txt from 
+    returns list of txt from inputs in correct groq-friendly format
     '''
+    textfiles = []
+    
+    for file in filelist:
+        ext = file.name.split(".")[1]
+        if "txt" in ext:
+            text = process_txt(file)
+        elif "pdf" in ext:
+            text = process_pdf(file, pages = False)
+        elif "doc" in ext:
+            text = process_docx(file)
+        textfiles.append(
+            {"source": {
+                "type": "text",
+                "text": text,
+                }
+            }
+        )
+    return textfiles
+
+
+
+
+
+
+
+
+
+        
