@@ -619,3 +619,5 @@ Message to respond to:
             if col1.button("add files to chat context"):
                 TEMP_VAR_FILES = return_texts(upload_docs)
                 #KEEP GOING - WHAT DO I DO HERE
+                # I have to add this to the chat history pickle file, and add the functionality to the groq_chat func
+                # then, I need to add func to add and delete docs tooo
