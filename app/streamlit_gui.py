@@ -336,7 +336,8 @@ Message to respond to:
                             "injection_col": (
                                 None if "injection_col" not in locals() else injection_col
                             ),  # check if injection_col var exists
-                            "model": model #groq model
+                            "model": model #groq model,
+                            "docs": [] #initialise with empty docs
                         }
                         st.session_state.current_chat = name
                         # save chat history now:
@@ -579,7 +580,8 @@ Message to respond to:
                 generated_response = groq_chat(
                     st.session_state.groq_client,
                     input_hist, 
-                    model=chat_histories["model"]
+                    model=chat_histories["model"],
+                    documents = chat_histories["docs"]
                 )
                 response = st.write_stream(generated_response)
 
@@ -609,15 +611,33 @@ Message to respond to:
             st.rerun()
 
     # upload docs
-    with st.expander("upload documents"):
-        col1, col2 = st.columns(2)
-        upload_docs = col1.file_uploader("upload text documents as context for chat",
-                                         type=["txt", "docx", "png"],
-                                         accept_multiple_files = True
-                                        )
-        if upload_docs is not None:
-            if col1.button("add files to chat context"):
-                TEMP_VAR_FILES = return_texts(upload_docs)
-                #KEEP GOING - WHAT DO I DO HERE
-                # I have to add this to the chat history pickle file, and add the functionality to the groq_chat func
-                # then, I need to add func to add and delete docs tooo
+    if st.session_state.current_chat:
+        with st.expander("upload documents"):
+            col1, col2 = st.columns(2)
+            upload_docs = col1.file_uploader("upload text documents as context for chat",
+                                             type=["txt", "docx", "png"],
+                                             accept_multiple_files = True
+                                            )
+            if upload_docs is not None:
+                if col1.button("add files to chat context"):
+                    formatted_docs = return_texts(upload_docs)
+                    if "docs" not in st.session_state.all_chat_histories[st.session_state.current_chat].keys():
+                        st.session_state.all_chat_histories[st.session_state.current_chat]["docs"] = formatted_docs
+                    else:
+                        st.session_state.all_chat_histories[st.session_state.current_chat]["docs"].extend(formatted_docs)
+                    save_chat_hist(st.session_state.current_chat)
+                    st.rerun()
+
+            if "docs" in st.session_state.all_chat_histories[st.session_state.current_chat].keys():
+                doc_list = st.session_state.all_chat_histories[st.session_state.current_chat]["docs"]
+                doc_selection = col2.dataframe(pd.DataFrame(doc_list),
+                                               on_select="rerun",
+                                               selection_mode=["multi-row"],
+                                              )
+                if doc_selection:
+                    if st.button("delete files from chat context"):
+                        for index in sorted(doc_selection["rows"]. reverse=True):
+                            del st.session_state.all_chat_histories[st.session_state.current_chat]["docs"][index]
+                        save_chat_hist(st.session_state.current_chat)
+                        st.rerun()
+                            
