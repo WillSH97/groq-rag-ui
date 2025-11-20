@@ -8,7 +8,7 @@ def clean_utf8(input_str):
     input_str = bytes(input_str, "utf-8").decode("utf-8", "ignore")
     return input_str
 
-def process_pdf(pdf_dir, pages = True)
+def process_pdf(pdf_dir, pages = True):
     reader = PdfReader(pdf_dir)
     pagetexts = []
     total_splits = []
@@ -17,7 +17,7 @@ def process_pdf(pdf_dir, pages = True)
         text = text.replace("\n", " ")  # clean text of new lines
         text = clean_utf8(text)
         pagetexts.append(text)
-    if pages = True:
+    if pages:
         return pagetexts
     else:
         return ' '.join(pagetexts)

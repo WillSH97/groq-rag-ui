@@ -93,6 +93,7 @@ if st.session_state.initialisation == False:
         import pandas as pd
         import pickle
         import re
+        from doc_processing_support import return_texts
 
     def load_chat_histories():
         chathist_list = [file for file in os.listdir(CHAT_DIR) if ".pickle" in file]
@@ -336,7 +337,7 @@ Message to respond to:
                             "injection_col": (
                                 None if "injection_col" not in locals() else injection_col
                             ),  # check if injection_col var exists
-                            "model": model #groq model,
+                            "model": model, #groq model,
                             "docs": [] #initialise with empty docs
                         }
                         st.session_state.current_chat = name
@@ -509,135 +510,135 @@ Message to respond to:
                         st.markdown(message["content"])
 
     # Main chat interface with tabs
-    
-    if st.session_state.current_chat:
-        if st.session_state.all_chat_histories[st.session_state.current_chat]["use_rag"]:
-            normal_tab, rag_tab = st.tabs(["Default", "RAG history"])
-            with normal_tab:
+    with st.container():
+        if st.session_state.current_chat:
+            if st.session_state.all_chat_histories[st.session_state.current_chat]["use_rag"]:
+                normal_tab, rag_tab = st.tabs(["Default", "RAG history"])
+                with normal_tab:
+                    display_chat_hist("normal_hist")
+            
+                with rag_tab:
+                    display_chat_hist("RAG_hist")
+            else:
                 display_chat_hist("normal_hist")
-        
-            with rag_tab:
-                display_chat_hist("RAG_hist")
         else:
             display_chat_hist("normal_hist")
-    else:
-        display_chat_hist("normal_hist")
-
-    # Single chat input and response handling
-    if st.session_state.current_chat and not st.session_state.is_generating:
-
-        prompt = st.chat_input("What is up?", max_chars=999999999)
-
-        if prompt:
-            # Get both histories
+    
+        # Single chat input and response handling
+        if st.session_state.current_chat and not st.session_state.is_generating:
+    
+            prompt = st.chat_input("What is up?", max_chars=999999999)
+    
+            if prompt:
+                # Get both histories
+                chat_histories = st.session_state.all_chat_histories[
+                    st.session_state.current_chat
+                ]
+                with st.chat_message("user"):
+                    st.markdown(prompt)
+    
+                # Create normal and RAG versions of the message
+                normal_message = {"role": "user", "content": prompt}
+                if chat_histories["use_rag"]:            
+                    injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
+                        chat_histories["selected_db"],
+                        prompt,
+                        num_return=num_return,
+                        max_dist=max_dist,
+                        inject_col=chat_histories["injection_col"],
+                        inject_template=chat_histories["injection_template"],
+                    )
+                    rag_message = {"role": "user", "content": injection_prompt}
+    
+                # Add messages to respective histories
+                if chat_histories["use_rag"]:
+                    chat_histories["normal_hist"].append(normal_message)
+                    chat_histories["RAG_hist"].append(rag_message)
+                else:
+                    chat_histories["normal_hist"].append(normal_message)
+                    chat_histories["RAG_hist"].append(normal_message)
+    
+                # Display user message
+    
+                st.session_state.is_generating = True
+                st.rerun()
+    
+        if st.session_state.current_chat and st.session_state.is_generating:
+            prompt = st.chat_input("Generating...", disabled=st.session_state.is_generating)
             chat_histories = st.session_state.all_chat_histories[
                 st.session_state.current_chat
             ]
-            with st.chat_message("user"):
-                st.markdown(prompt)
-
-            # Create normal and RAG versions of the message
-            normal_message = {"role": "user", "content": prompt}
-            if chat_histories["use_rag"]:            
-                injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
-                    chat_histories["selected_db"],
-                    prompt,
-                    num_return=num_return,
-                    max_dist=max_dist,
-                    inject_col=chat_histories["injection_col"],
-                    inject_template=chat_histories["injection_template"],
-                )
-                rag_message = {"role": "user", "content": injection_prompt}
-
-            # Add messages to respective histories
-            if chat_histories["use_rag"]:
-                chat_histories["normal_hist"].append(normal_message)
-                chat_histories["RAG_hist"].append(rag_message)
-            else:
-                chat_histories["normal_hist"].append(normal_message)
-                chat_histories["RAG_hist"].append(normal_message)
-
-            # Display user message
-
-            st.session_state.is_generating = True
-            st.rerun()
-
-    if st.session_state.current_chat and st.session_state.is_generating:
-        prompt = st.chat_input("Generating...", disabled=st.session_state.is_generating)
-        chat_histories = st.session_state.all_chat_histories[
-            st.session_state.current_chat
-        ]
-
-        # Generate response using RAG-enhanced prompt
-        with st.chat_message("assistant"):
-            with st.spinner(
-                "Responding..."
-            ): 
-                if chat_histories["use_rag"]:
-                    input_hist = chat_histories["RAG_hist"]
-                else:
-                    input_hist = chat_histories["normal_hist"]
-                generated_response = groq_chat(
-                    st.session_state.groq_client,
-                    input_hist, 
-                    model=chat_histories["model"],
-                    documents = chat_histories["docs"]
-                )
-                response = st.write_stream(generated_response)
-
-        # Add response to both histories
-        assistant_message = {"role": "assistant", "content": response}
-        chat_histories["normal_hist"].append(assistant_message)
-        chat_histories["RAG_hist"].append(assistant_message)
-        save_chat_hist(st.session_state.current_chat)
-        st.session_state.is_generating = False
-        st.rerun()
-        
-    #allow user to delete just the chat history
-    if st.session_state.current_chat and len(st.session_state.all_chat_histories[
-            st.session_state.current_chat
-        ]["normal_hist"])>=2:
-        if st.button("Restart chat 🔄️", use_container_width = True):
-            chat_histories = st.session_state.all_chat_histories[
-                    st.session_state.current_chat
-                ]
-            chat_histories["normal_hist"]=[
-                        {"role": "system", "content": chat_histories["system_prompt"]},
-                    ]
-            chat_histories["RAG_hist"]=[
-                        {"role": "system", "content": chat_histories["system_prompt"]},
-                    ]
-            save_chat_hist(st.session_state.current_chat)
-            st.rerun()
-
-    # upload docs
-    if st.session_state.current_chat:
-        with st.expander("upload documents"):
-            col1, col2 = st.columns(2)
-            upload_docs = col1.file_uploader("upload text documents as context for chat",
-                                             type=["txt", "docx", "png"],
-                                             accept_multiple_files = True
-                                            )
-            if upload_docs is not None:
-                if col1.button("add files to chat context"):
-                    formatted_docs = return_texts(upload_docs)
-                    if "docs" not in st.session_state.all_chat_histories[st.session_state.current_chat].keys():
-                        st.session_state.all_chat_histories[st.session_state.current_chat]["docs"] = formatted_docs
+    
+            # Generate response using RAG-enhanced prompt
+            with st.chat_message("assistant"):
+                with st.spinner(
+                    "Responding..."
+                ): 
+                    if chat_histories["use_rag"]:
+                        input_hist = chat_histories["RAG_hist"]
                     else:
-                        st.session_state.all_chat_histories[st.session_state.current_chat]["docs"].extend(formatted_docs)
-                    save_chat_hist(st.session_state.current_chat)
-                    st.rerun()
-
-            if "docs" in st.session_state.all_chat_histories[st.session_state.current_chat].keys():
-                doc_list = st.session_state.all_chat_histories[st.session_state.current_chat]["docs"]
-                doc_selection = col2.dataframe(pd.DataFrame(doc_list),
-                                               on_select="rerun",
-                                               selection_mode=["multi-row"],
-                                              )
-                if doc_selection:
-                    if st.button("delete files from chat context"):
-                        for index in sorted(doc_selection["rows"]. reverse=True):
-                            del st.session_state.all_chat_histories[st.session_state.current_chat]["docs"][index]
+                        input_hist = chat_histories["normal_hist"]
+                    generated_response = groq_chat(
+                        st.session_state.groq_client,
+                        input_hist, 
+                        model=chat_histories["model"],
+                        documents = chat_histories["docs"]
+                    )
+                    response = st.write_stream(generated_response)
+    
+            # Add response to both histories
+            assistant_message = {"role": "assistant", "content": response}
+            chat_histories["normal_hist"].append(assistant_message)
+            chat_histories["RAG_hist"].append(assistant_message)
+            save_chat_hist(st.session_state.current_chat)
+            st.session_state.is_generating = False
+            st.rerun()
+            
+        #allow user to delete just the chat history
+        if st.session_state.current_chat and len(st.session_state.all_chat_histories[
+                st.session_state.current_chat
+            ]["normal_hist"])>=2:
+            if st.button("Restart chat 🔄️", use_container_width = True):
+                chat_histories = st.session_state.all_chat_histories[
+                        st.session_state.current_chat
+                    ]
+                chat_histories["normal_hist"]=[
+                            {"role": "system", "content": chat_histories["system_prompt"]},
+                        ]
+                chat_histories["RAG_hist"]=[
+                            {"role": "system", "content": chat_histories["system_prompt"]},
+                        ]
+                save_chat_hist(st.session_state.current_chat)
+                st.rerun()
+    
+        # upload docs
+        if st.session_state.current_chat:
+            with st.expander("upload documents"):
+                col1, col2 = st.columns(2)
+                upload_docs = col1.file_uploader("upload text documents as context for chat",
+                                                 type=["txt", "docx", "pdf"],
+                                                 accept_multiple_files = True
+                                                )
+                if upload_docs is not None:
+                    if col1.button("add files to chat context"):
+                        formatted_docs = return_texts(upload_docs)
+                        if "docs" not in st.session_state.all_chat_histories[st.session_state.current_chat].keys():
+                            st.session_state.all_chat_histories[st.session_state.current_chat]["docs"] = formatted_docs
+                        else:
+                            st.session_state.all_chat_histories[st.session_state.current_chat]["docs"].extend(formatted_docs)
                         save_chat_hist(st.session_state.current_chat)
                         st.rerun()
+    
+                if "docs" in st.session_state.all_chat_histories[st.session_state.current_chat].keys():
+                    doc_list = st.session_state.all_chat_histories[st.session_state.current_chat]["docs"]
+                    doc_selection = col2.dataframe(pd.DataFrame(doc_list),
+                                                   on_select="rerun",
+                                                   selection_mode=["multi-row"],
+                                                  )
+                    if doc_selection:
+                        if col2.button("delete files from chat context"):
+                            for index in sorted(doc_selection["selection"]["rows"], reverse=True):
+                                del st.session_state.all_chat_histories[st.session_state.current_chat]["docs"][index]
+                            save_chat_hist(st.session_state.current_chat)
+                            st.rerun()
                             
