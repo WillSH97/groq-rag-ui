@@ -53,6 +53,7 @@ with st.spinner("loading packages..."):
     import pickle
     import re
     import base64
+    from base64 import b64decode
     from io import BytesIO
 
 BASE_DIR = path.abspath(path.dirname(__file__))
@@ -523,7 +524,7 @@ Message to respond to:
         '''
         if isinstance(message, list): #for handling image + text
             print("fuick you")
-            text = [obj["text"] for obj in message if obj["type"] == "text"]
+            text = [obj["text"] for obj in message if obj["type"] == "text"][0]
             
             imgs = [obj["image_url"]["url"] for obj in message if obj["type"] == "image_url"] #assuming base64 encoding
             imgs = [x.split(',')[1] for x in imgs] #cleaning and only keeping the b64 encoding
@@ -582,57 +583,55 @@ Message to respond to:
                 prompt = st.chat_input("What is up?", max_chars=999999999)
     
             if prompt:
-                # check length of files
-                if not isinstance(prompt, str): #NOT a string, must be the dict-like return from streamlit
-                    if len(prompt.files) > 5: # max 5 images
-                        st.warning("STOP! You can only add a max of 5 images to your message at a time. Delete some images to continue")
+                # Handle image attachments
+                if not isinstance(prompt, str):  # Images attached
+                    if len(prompt.files) > 5:
+                        st.warning("STOP! You can only add a max of 5 images to your message at a time.")
+                        st.stop()
+                    
+                    # Reformat for Groq
+                    reformat_prompt = [{"type": "text", "text": prompt.text}]
+                    for img in prompt.files:
+                        img_data = base64.b64encode(img.read()).decode()
+                        reformat_prompt.append({
+                            "type": "image_url",
+                            "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}
+                        })
+                else:  # Plain text
+                    reformat_prompt = prompt
+                chat_histories = st.session_state.all_chat_histories[
+                    st.session_state.current_chat
+                ]
+                with st.chat_message("user"):
+                    display_msg_with_thinking_and_img(reformat_prompt)
+                    # st.markdown(prompt)
+    
+                # Create normal and RAG versions of the message
+                normal_message = {"role": "user", "content": reformat_prompt}
+                if chat_histories["use_rag"]:
+                    #### HOW DO I FIX THIS
+                    injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
+                        chat_histories["selected_db"],
+                        reformat_prompt,
+                        num_return=num_return,
+                        max_dist=max_dist,
+                        inject_col=chat_histories["injection_col"],
+                        inject_template=chat_histories["injection_template"],
+                    )
+                    rag_message = {"role": "user", "content": injection_prompt}
+    
+                # Add messages to respective histories
+                # if chat_histories["use_rag"]:
+                    chat_histories["normal_hist"].append(normal_message)
+                    chat_histories["RAG_hist"].append(rag_message)
                 else:
-                    if not isinstance(prompt, str):               # image(s) attached
-                        if len(prompt.files) > 5:
-                            st.warning("STOP! You can only add a max of 5 images …")
-                            st.stop()                              # stop here, don’t continue
-                        # ---- re-format for Groq ----
-                        reformat_prompt = [{"type": "text", "text": prompt.text}]
-                        for img in prompt.files:
-                            reformat_prompt.append(
-                                {"type": "image_url",
-                                 "image_url": {"url": f"data:image/jpeg;base64,{base64.b64encode(img).decode()}"}}
-                            )
-                    else: 
-                        reformat_prompt = prompt
-                    chat_histories = st.session_state.all_chat_histories[
-                        st.session_state.current_chat
-                    ]
-                    with st.chat_message("user"):
-                        display_msg_with_thinking_and_img(reformat_prompt)
-                        # st.markdown(prompt)
-        
-                    # Create normal and RAG versions of the message
-                    normal_message = {"role": "user", "content": reformat_prompt}
-                    if chat_histories["use_rag"]:
-                        #### HOW DO I FIX THIS
-                        injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
-                            chat_histories["selected_db"],
-                            reformat_prompt,
-                            num_return=num_return,
-                            max_dist=max_dist,
-                            inject_col=chat_histories["injection_col"],
-                            inject_template=chat_histories["injection_template"],
-                        )
-                        rag_message = {"role": "user", "content": injection_prompt}
-        
-                    # Add messages to respective histories
-                    # if chat_histories["use_rag"]:
-                        chat_histories["normal_hist"].append(normal_message)
-                        chat_histories["RAG_hist"].append(rag_message)
-                    else:
-                        chat_histories["normal_hist"].append(normal_message)
-                        chat_histories["RAG_hist"].append(normal_message)
-        
-                    # Display user message
-        
-                    st.session_state.is_generating = True
-                    st.rerun()
+                    chat_histories["normal_hist"].append(normal_message)
+                    chat_histories["RAG_hist"].append(normal_message)
+    
+                # Display user message
+    
+                st.session_state.is_generating = True
+                st.rerun()
     
         if st.session_state.current_chat and st.session_state.is_generating:
             prompt = st.chat_input("Generating...", disabled=st.session_state.is_generating)
