@@ -25,6 +25,8 @@ def groq_chat(client,
               chat_history: list[dict], 
               model: str, 
               # system_prompt: str, 
+              reasoning_level = "not-entered", #has to be weird because of qwen string
+              #reasoning_format = "none"
              ):
     '''
     Groq chat API call wrapper, specifically rejigged for RAGChat.
@@ -47,10 +49,13 @@ def groq_chat(client,
 
     
     if model in reasoning_models:
+        if reasoning_level == "not-entered":
+            reasoning_level = ("default" if model == 'qwen/qwen3-32b' else "medium")
         chat_completion = client.chat.completions.create(
             messages = msg_hist,
             model = model,
-            include_reasoning = False, #removes reasoning tokens from output because I'm lazy
+            reasoning_effort = reasoning_level,
+            reasoning_format = "parsed",
             stream = True,
         )
     else:
@@ -60,8 +65,17 @@ def groq_chat(client,
             # include_reasoning = False, #removes reasoning tokens from output because I'm lazy
             stream = True,
         )
+    #toggles for reformatting streamed reasoning
+    thinking = (model in reasoning_models) #bool for if thinking is on
     for chunk in chat_completion:
-         content = chunk.choices[0].delta.content
-         if content:
-             yield content  # Yield content for streaming
+        content = chunk.choices[0].delta.content
+        if thinking:
+            thinking_tokens = chunk.choices[0].delta.reasoning
+            if thinking_tokens:
+                yield thinking_tokens
+        if content:
+            if thinking:
+                yield"</think>"
+                thinking = False
+            yield content  # Yield content for streaming
  
