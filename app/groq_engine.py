@@ -20,6 +20,11 @@ reasoning_models = [
     'qwen/qwen3-32b',
 ]
 
+image_models = [
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+    'meta-llama/llama-4-maverick-17b-128e-instruct',
+]
+
 def groq_chat(client, 
               # new_message: str, 
               chat_history: list[dict], 

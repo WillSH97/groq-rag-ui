@@ -30,6 +30,7 @@ from chromadb_engine import (
     make_db_from_txt,
 )
 
+from copy import deepcopy
 
 def create_injection_prompt(
     db_name,
@@ -43,8 +44,11 @@ def create_injection_prompt(
     creates injection prompt based on input msg and query return.
     """
     collection = client.get_collection(db_name)
-    query = input_msg
-    results = collection.query(query_texts=[input_msg], n_results=num_return)
+    if isinstance(input_msg, list): #for bullshit llama 4 img format
+        query = input_msg[0]["text"]
+    else:
+        query = input_msg
+    results = collection.query(query_texts=[query], n_results=num_return)
 
     if inject_col:
         inject_list = [x[inject_col] for x in results["metadatas"][0]]
@@ -54,6 +58,11 @@ def create_injection_prompt(
 
     injection_str = "\n\n\n".join(inject_list)
     augmented_user_msg = inject_template.format(
-        INJECT_TEXT=injection_str, USER_MESSAGE=input_msg
+        INJECT_TEXT=injection_str, USER_MESSAGE=query
     )
-    return augmented_user_msg
+    if isinstance(input_msg, list):
+        output_msg = deepcopy(input_msg)
+        output_msg[0]["text"] = augmented_user_msg
+        return output_msg
+    else:
+        return augmented_user_msg

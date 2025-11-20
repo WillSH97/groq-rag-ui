@@ -26,7 +26,7 @@ load_dotenv()
 
 with st.spinner("importing Groq and model list..."):
     from groq import Groq
-    from groq_engine import model_list, reasoning_models, groq_chat
+    from groq_engine import model_list, reasoning_models, image_models, groq_chat
 
 # initialise base directories
 from os import path
@@ -52,6 +52,8 @@ with st.spinner("loading packages..."):
     import pandas as pd
     import pickle
     import re
+    import base64
+    from io import BytesIO
 
 BASE_DIR = path.abspath(path.dirname(__file__))
 CHAT_DIR = os.path.join(BASE_DIR, "chats")
@@ -512,12 +514,27 @@ Message to respond to:
                         label = 'Reasoning Level',
                         options = ['none', 'default']
                     )
+            else:
+                reasoning_level = None
 
-    def display_msg_with_thinking(message):
+    def display_msg_with_thinking_and_img(message):
         '''
-        parses msgs with thinking in them
+        parses msgs with thinking and images in them
         '''
-        split_message = message.split("</think>")
+        if isinstance(message, list): #for handling image + text
+            print("fuick you")
+            text = [obj["text"] for obj in message if obj["type"] == "text"]
+            
+            imgs = [obj["image_url"]["url"] for obj in message if obj["type"] == "image_url"] #assuming base64 encoding
+            imgs = [x.split(',')[1] for x in imgs] #cleaning and only keeping the b64 encoding
+            imgs = [BytesIO(b64decode(x)) for x in imgs]
+            #display images
+            st.image(imgs)
+            
+        else:
+            text = message
+        # handle text outputs
+        split_message = text.split("</think>")
         split_message = [x.strip() for x in split_message] #cleaning all trailing and leading whitespace
         split_message = list(filter(None, split_message)) #remove Nones
         if len(split_message) == 2:
@@ -537,7 +554,7 @@ Message to respond to:
             for message in current_messages:
                 if message["role"] != "system":
                     with st.chat_message(message["role"]):
-                        display_msg_with_thinking(message["content"])
+                        display_msg_with_thinking_and_img(message["content"])
                         #st.markdown(message["content"])
 
     # Main chat interface with tabs
@@ -554,42 +571,68 @@ Message to respond to:
     
         # Single chat input and response handling
         if st.session_state.current_chat and not st.session_state.is_generating:
-    
-            prompt = st.chat_input("What is up?", max_chars=999999999)
+            if st.session_state.all_chat_histories[st.session_state.current_chat]["model"] in image_models:
+                prompt = st.chat_input("What is up? You can put images in me, btw", 
+                                       max_chars=999999999, 
+                                       accept_file="multiple",
+                                       file_type=["jpeg", 'jpg', 'png'],
+                                       
+                                      )
+            else:
+                prompt = st.chat_input("What is up?", max_chars=999999999)
     
             if prompt:
-                # Get both histories
-                chat_histories = st.session_state.all_chat_histories[
-                    st.session_state.current_chat
-                ]
-                with st.chat_message("user"):
-                    st.markdown(prompt)
-    
-                # Create normal and RAG versions of the message
-                normal_message = {"role": "user", "content": prompt}
-                if chat_histories["use_rag"]:
-                    injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
-                        chat_histories["selected_db"],
-                        prompt,
-                        num_return=num_return,
-                        max_dist=max_dist,
-                        inject_col=chat_histories["injection_col"],
-                        inject_template=chat_histories["injection_template"],
-                    )
-                    rag_message = {"role": "user", "content": injection_prompt}
-    
-                # Add messages to respective histories
-                # if chat_histories["use_rag"]:
-                    chat_histories["normal_hist"].append(normal_message)
-                    chat_histories["RAG_hist"].append(rag_message)
+                # check length of files
+                if not isinstance(prompt, str): #NOT a string, must be the dict-like return from streamlit
+                    if len(prompt.files) > 5: # max 5 images
+                        st.warning("STOP! You can only add a max of 5 images to your message at a time. Delete some images to continue")
                 else:
-                    chat_histories["normal_hist"].append(normal_message)
-                    chat_histories["RAG_hist"].append(normal_message)
-    
-                # Display user message
-    
-                st.session_state.is_generating = True
-                st.rerun()
+                    if not isinstance(prompt, str):               # image(s) attached
+                        if len(prompt.files) > 5:
+                            st.warning("STOP! You can only add a max of 5 images …")
+                            st.stop()                              # stop here, don’t continue
+                        # ---- re-format for Groq ----
+                        reformat_prompt = [{"type": "text", "text": prompt.text}]
+                        for img in prompt.files:
+                            reformat_prompt.append(
+                                {"type": "image_url",
+                                 "image_url": {"url": f"data:image/jpeg;base64,{base64.b64encode(img).decode()}"}}
+                            )
+                    else: 
+                        reformat_prompt = prompt
+                    chat_histories = st.session_state.all_chat_histories[
+                        st.session_state.current_chat
+                    ]
+                    with st.chat_message("user"):
+                        display_msg_with_thinking_and_img(reformat_prompt)
+                        # st.markdown(prompt)
+        
+                    # Create normal and RAG versions of the message
+                    normal_message = {"role": "user", "content": reformat_prompt}
+                    if chat_histories["use_rag"]:
+                        #### HOW DO I FIX THIS
+                        injection_prompt = create_injection_prompt(  #### HAVE THIS DICTATED BY STUFF IN THE SIDEBAR!
+                            chat_histories["selected_db"],
+                            reformat_prompt,
+                            num_return=num_return,
+                            max_dist=max_dist,
+                            inject_col=chat_histories["injection_col"],
+                            inject_template=chat_histories["injection_template"],
+                        )
+                        rag_message = {"role": "user", "content": injection_prompt}
+        
+                    # Add messages to respective histories
+                    # if chat_histories["use_rag"]:
+                        chat_histories["normal_hist"].append(normal_message)
+                        chat_histories["RAG_hist"].append(rag_message)
+                    else:
+                        chat_histories["normal_hist"].append(normal_message)
+                        chat_histories["RAG_hist"].append(normal_message)
+        
+                    # Display user message
+        
+                    st.session_state.is_generating = True
+                    st.rerun()
     
         if st.session_state.current_chat and st.session_state.is_generating:
             prompt = st.chat_input("Generating...", disabled=st.session_state.is_generating)
@@ -606,12 +649,20 @@ Message to respond to:
                         input_hist = chat_histories["RAG_hist"]
                     else:
                         input_hist = chat_histories["normal_hist"]
-                    generated_response = groq_chat(
-                        st.session_state.groq_client,
-                        input_hist, 
-                        model=chat_histories["model"],
-                        reasoning_level = reasoning_level,
-                    )
+                    if chat_histories["model"] in reasoning_models: 
+                        generated_response = groq_chat(
+                            st.session_state.groq_client,
+                            input_hist, 
+                            model=chat_histories["model"],
+                            reasoning_level = reasoning_level,
+                        )
+                    else:
+                        generated_response = groq_chat(
+                            st.session_state.groq_client,
+                            input_hist, 
+                            model=chat_histories["model"],
+                            # reasoning_level = reasoning_level,
+                        )
                     response = st.write_stream(generated_response)
     
             # Add response to both histories
