@@ -54,6 +54,7 @@ with st.spinner("loading packages..."):
     import re
     import base64
     from base64 import b64decode
+    from PIL import Image
     from io import BytesIO
 
 BASE_DIR = path.abspath(path.dirname(__file__))
@@ -523,7 +524,7 @@ Message to respond to:
         parses msgs with thinking and images in them
         '''
         if isinstance(message, list): #for handling image + text
-            print("fuick you")
+            # print("fuick you")
             text = [obj["text"] for obj in message if obj["type"] == "text"][0]
             
             imgs = [obj["image_url"]["url"] for obj in message if obj["type"] == "image_url"] #assuming base64 encoding
@@ -592,7 +593,18 @@ Message to respond to:
                     # Reformat for Groq
                     reformat_prompt = [{"type": "text", "text": prompt.text}]
                     for img in prompt.files:
-                        img_data = base64.b64encode(img.read()).decode()
+                        #resize image
+                        img = Image.open(img)
+                        img_format = img.format
+                        if any(sideres > 5750 for sideres in img.size): # img.size[0] > 5750 or img.size[1] > 5750:
+                            max_res = max(img.size)
+                            scale_pct = 5750/max_res
+                            img=img.resize((int(round(img.size[0]*scale_pct)), int(round(img.size[1]*scale_pct))))
+                            #
+                        #convert to base64
+                        buffer = BytesIO()
+                        img.save(buffer, format=img_format)
+                        img_data = base64.b64encode(buffer.getvalue()).decode()
                         reformat_prompt.append({
                             "type": "image_url",
                             "image_url": {"url": f"data:image/jpeg;base64,{img_data}"}
