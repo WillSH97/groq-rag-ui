@@ -438,15 +438,6 @@ Message to respond to:
     # Sidebar with chat management in expander
     with st.sidebar:
         st.title("RAGChat")
-
-        # st.button(
-        #     "RAG: " + ("ON" if st.session_state.use_rag else "OFF"),
-        #     on_click=lambda: setattr(
-        #         st.session_state, "use_rag", not st.session_state.use_rag
-        #     ),
-        #     type=("primary" if st.session_state.use_rag else "secondary"),
-        #     use_container_width=True,
-        # )
         with st.expander("Chat Management", expanded=True):
             if st.button("Create New Chat"):
                 create_new_chat_hist()
@@ -524,7 +515,6 @@ Message to respond to:
         parses msgs with thinking and images in them
         '''
         if isinstance(message, list): #for handling image + text
-            # print("fuick you")
             text = [obj["text"] for obj in message if obj["type"] == "text"][0]
             
             imgs = [obj["image_url"]["url"] for obj in message if obj["type"] == "image_url"] #assuming base64 encoding
