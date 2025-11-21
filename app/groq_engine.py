@@ -20,6 +20,11 @@ reasoning_models = [
     'qwen/qwen3-32b',
 ]
 
+image_models = [
+    'meta-llama/llama-4-scout-17b-16e-instruct',
+    'meta-llama/llama-4-maverick-17b-128e-instruct',
+]
+
 def groq_chat(client, 
               # new_message: str, 
               chat_history: list[dict], 
@@ -46,7 +51,11 @@ def groq_chat(client,
         return
     
     msg_hist = [{key: x[key] for key in ["role", "content"] if key in x} for x in chat_history] #clean the chatbot bullshit out
-
+    # for llama 4 - remove all previous images apart from newest message
+    if model in image_models:
+        for msg in msg_hist[:-1]:  # Exclude last message
+            if isinstance(msg["content"], list):
+                msg["content"] = [x for x in msg["content"] if x["type"] == "text"]
     
     if model in reasoning_models:
         if reasoning_level == "not-entered":
